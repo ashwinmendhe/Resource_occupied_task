@@ -6,10 +6,9 @@ from rest_framework.response import Response
 from django.db.models import Q
 from rest_framework.renderers import JSONRenderer
 from rest_framework.parsers import JSONParser
-import io
+import io, json
 
 def filter_data(reso, newfrom_time, newto_time):
-    # reso = Resource.objects.filter(Q(name=name) & (Q(from_time=from_time) | Q(to_time=to_time)))
     serializer= ResourceSerializer(reso,many=True)
     json_data = JSONRenderer().render(serializer.data)
     stream = io.BytesIO(json_data)
@@ -19,8 +18,6 @@ def filter_data(reso, newfrom_time, newto_time):
         to_time=[eval(i) for i in pythondata[i]['to_time'].split(':')]
         new_from_time=[eval(i) for i in newfrom_time.split(':')]
         new_to_time=[eval(i) for i in newto_time.split(':')]
-        # from_time = int(pythondata[i]['from_time'])
-        # to_time = int(pythondata[i]['to_time'])
         bet = list(range(from_time[0],to_time[0]+1))
         x,y,z = reso1(new_from_time[0], new_to_time[0], bet)
     return x,y,z
@@ -48,11 +45,12 @@ def reso1(from_time, to_time,betwn_time):
 class ResourceAPI(APIView):
     def get(self, request, name=None, format = None):
         if name is not None:
-            reso = Resource.objects.get(name=name)
-            serializer= ResourceSerializer(reso)
+            reso = Resource.objects.filter(name=name)
+            serializer= ResourceSerializer(reso, many=True)
+            # v = json.loads(json.dumps(serializer.data))
             return Response(serializer.data)
         reso = Resource.objects.all()
-        serializer = ResourceSerializer(reso, many= True)
+        serializer = ResourceSerializer(reso, many=True)
         return Response(serializer.data)
 
     def post(self, request, format=None):
@@ -72,17 +70,17 @@ class ResourceAPI(APIView):
             x,y,z = filter_data(reso,newfrom_time,newto_time)
             return Response({'msg': f'{x} {y} {z}'})
 
-    def put(self,request, name = None, format=None):
-        stu = Resource.objects.get(name = name)
-        serializer = ResourceSerializer(stu, data= request.data, partial = False)
+    def patch(self,request, name = None, id=None,format=None):
+        stu = Resource.objects.get(name = name, id = id)
+        serializer = ResourceSerializer(stu, data= request.data, partial = True)
         if serializer.is_valid():
             serializer.save()
             res = {'msg':'Complete Data Updated Successfully'}
             return Response(res) 
         return Response(serializer.errors)
 
-    def delete(self,request, name = None, format=None):
-        stu = Resource.objects.get(name = name)
+    def delete(self,request, name = None, id=None, format=None):
+        stu = Resource.objects.get(name = name, id=id)
         stu.delete()
         res = {'msg':'Data Deleted'}
         return Response(res)
