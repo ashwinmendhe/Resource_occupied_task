@@ -8,40 +8,40 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.parsers import JSONParser
 import io, json
 
-def filter_data(l,newfrom_time, newto_time,value):
-    
-    for j in range(len(l)):
-        from_time=[eval(i) for i in l[j]['from_time'].split(':')]
-        to_time=[eval(i) for i in l[j]['to_time'].split(':')]
+def filter_data(l,newfrom_time, newto_time):
+    value = list(range(1,25))
+    print(newfrom_time, newto_time)
+    for i in range(len(l)):
+        from_time=[eval(i) for i in l[i]['from_time'].split(':')]
+        to_time=[eval(i) for i in l[i]['to_time'].split(':')]
         bet = list(range(from_time[0],to_time[0]+1))
         value = [i for i in value if i not in bet]
-    newbet = list(range(newfrom_time+1,newto_time))
+    if newto_time-newfrom_time == 1:
+        newbet = list(range(newfrom_time,newto_time))
+    else:
+        newbet = list(range(newfrom_time+1,newto_time))
     if all(item in value for item in newbet):
-        print("yes")
+        print("yes it is available")
         value = [i for i in value if i not in newbet]
         return "yes"
     else:
         return f"It is already occupied"
 
+def perform(request, name, data):
+    
+    newfrom_time=[eval(i) for i in request.data['from_time'].split(':')]
+    newto_time=[eval(i) for i in request.data['to_time'].split(':')]
+    if type(data) == int:
+        print("for patch")
+        reso = Resource.objects.filter(Q(name=name))
+    else:
+        reso = Resource.objects.filter(Q(name=name) & Q(date=data))
+    serializer_old= ResourceSerializer(reso, many=True)
+    pythondata = json.loads(json.dumps(serializer_old.data))
+    available=filter_data(pythondata,newfrom_time[0], newto_time[0])
+    return available
 
-def reso1(from_time, to_time,betwn_time):
-    if from_time not in betwn_time:
-        print("from_time: ", betwn_time)
-        if from_time<betwn_time[0]:
-            x = f"It empty between {from_time} to {betwn_time[0]}."
-    else:
-        x = ''
-    if to_time not in betwn_time:
-        print("to_time: ", betwn_time)
-        if to_time>betwn_time[0]:
-            y = f"It empty between {betwn_time[-1]} to {to_time}."
-    else:
-        y = ''
-    if from_time in betwn_time and to_time in betwn_time:
-        z = f"It is already occupied between {from_time} to {to_time}."
-    else:
-        z = ''
-    return x,y,z
+
 
 # Create your views here.
 class ResourceAPI(APIView):
@@ -57,36 +57,34 @@ class ResourceAPI(APIView):
         return Response(serializer.data)
 
     def post(self, request, format=None):
-        value = list(range(1,25))
         serializer= ResourceSerializer(data=request.data)
         name = request.data['name']
         date=request.data['date']
-        # newfrom_time=request.data['from_time']
-        # newto_time=request.data['to_time']
-        newfrom_time=[eval(i) for i in request.data['from_time'].split(':')]
-        newto_time=[eval(i) for i in request.data['to_time'].split(':')]
-        # reso = Resource.objects.filter(Q(name=name) & Q(date=date) & (Q(from_time=newfrom_time) | Q(to_time=newto_time)))
-        reso = Resource.objects.filter(Q(name=name) & Q(date=date))
-        serializer_old= ResourceSerializer(reso, many=True)
-        pythondata = json.loads(json.dumps(serializer_old.data))
-        available=filter_data(pythondata,newfrom_time[0], newto_time[0],value)
+        available = perform(request,name,date)
+        print(available)
         if available == "yes":
-
             if serializer.is_valid():
                 serializer.save()
                 return Response({'msg':'data created'})
             return Response(serializer.error)
         else:
             return Response({'msg': available})
-
+    
+    
+    
     def patch(self,request, name = None, id=None,format=None):
         stu = Resource.objects.get(name = name, id = id)
         serializer = ResourceSerializer(stu, data= request.data, partial = True)
-        if serializer.is_valid():
-            serializer.save()
-            res = {'msg':'Complete Data Updated Successfully'}
-            return Response(res) 
-        return Response(serializer.errors)
+
+        available = perform(request,name,id)
+        if available == "yes":
+            if serializer.is_valid():
+                serializer.save()
+                return Response({'msg':'data updated'})
+            return Response(serializer.error)
+        else:
+            return Response({'msg': available})
+    
 
     def delete(self,request, name = None, id=None, format=None):
         stu = Resource.objects.get(name = name, id=id)
