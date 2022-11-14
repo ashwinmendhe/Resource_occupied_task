@@ -8,19 +8,21 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.parsers import JSONParser
 import io, json
 
-def filter_data(reso, newfrom_time, newto_time):
-    serializer= ResourceSerializer(reso,many=True)
-    json_data = JSONRenderer().render(serializer.data)
-    stream = io.BytesIO(json_data)
-    pythondata = JSONParser().parse(stream)
-    for i in range(len(pythondata)):
-        from_time=[eval(i) for i in pythondata[i]['from_time'].split(':')]
-        to_time=[eval(i) for i in pythondata[i]['to_time'].split(':')]
-        new_from_time=[eval(i) for i in newfrom_time.split(':')]
-        new_to_time=[eval(i) for i in newto_time.split(':')]
+def filter_data(l,newfrom_time, newto_time,value):
+    
+    for j in range(len(l)):
+        from_time=[eval(i) for i in l[j]['from_time'].split(':')]
+        to_time=[eval(i) for i in l[j]['to_time'].split(':')]
         bet = list(range(from_time[0],to_time[0]+1))
-        x,y,z = reso1(new_from_time[0], new_to_time[0], bet)
-    return x,y,z
+        value = [i for i in value if i not in bet]
+    newbet = list(range(newfrom_time+1,newto_time))
+    if all(item in value for item in newbet):
+        print("yes")
+        value = [i for i in value if i not in newbet]
+        return "yes"
+    else:
+        return f"It is already occupied"
+
 
 def reso1(from_time, to_time,betwn_time):
     if from_time not in betwn_time:
@@ -43,6 +45,7 @@ def reso1(from_time, to_time,betwn_time):
 
 # Create your views here.
 class ResourceAPI(APIView):
+    
     def get(self, request, name=None, format = None):
         if name is not None:
             reso = Resource.objects.filter(name=name)
@@ -54,21 +57,27 @@ class ResourceAPI(APIView):
         return Response(serializer.data)
 
     def post(self, request, format=None):
+        value = list(range(1,25))
         serializer= ResourceSerializer(data=request.data)
         name = request.data['name']
         date=request.data['date']
-        newfrom_time=request.data['from_time']
-        newto_time=request.data['to_time']
-        reso = Resource.objects.filter(Q(name=name) & Q(date=date) & (Q(from_time=newfrom_time) | Q(to_time=newto_time)))
-        if len(reso) == 0: 
-            # print("2. in not none")
+        # newfrom_time=request.data['from_time']
+        # newto_time=request.data['to_time']
+        newfrom_time=[eval(i) for i in request.data['from_time'].split(':')]
+        newto_time=[eval(i) for i in request.data['to_time'].split(':')]
+        # reso = Resource.objects.filter(Q(name=name) & Q(date=date) & (Q(from_time=newfrom_time) | Q(to_time=newto_time)))
+        reso = Resource.objects.filter(Q(name=name) & Q(date=date))
+        serializer_old= ResourceSerializer(reso, many=True)
+        pythondata = json.loads(json.dumps(serializer_old.data))
+        available=filter_data(pythondata,newfrom_time[0], newto_time[0],value)
+        if available == "yes":
+
             if serializer.is_valid():
                 serializer.save()
                 return Response({'msg':'data created'})
             return Response(serializer.error)
         else:
-            x,y,z = filter_data(reso,newfrom_time,newto_time)
-            return Response({'msg': f'{x} {y} {z}'})
+            return Response({'msg': available})
 
     def patch(self,request, name = None, id=None,format=None):
         stu = Resource.objects.get(name = name, id = id)
